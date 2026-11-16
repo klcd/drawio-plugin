@@ -69,6 +69,137 @@ EditorUi.isNativePlantUmlSupported = () => false;
 document.body.classList.add('geEditor','geClassic');
 const ui = new EditorUi(new Editor());
 window.drawioUi = ui;
+// Make both side panels easy to collapse without taking focus away from the
+// diagram. The standalone EditorUi keeps the upstream actions but does not
+// create App's panel buttons, so add left, focus and right controls here.
+{
+  ui.hsplitClickEnabled = true;
+  ui.hsplit.setAttribute('title', '单击折叠/展开左侧图形栏；拖动调整宽度');
+  let toolbarEnd = ui.toolbarContainer.querySelector('.geToolbarEnd');
+  if (toolbarEnd == null) {
+    toolbarEnd = document.createElement('div');
+    toolbarEnd.className = 'geToolbar geToolbarEnd';
+    ui.toolbarContainer.appendChild(toolbarEnd);
+  }
+  const createToggle = (className, label, title, activate) => {
+    const toggle = document.createElement('a');
+    toggle.className = `geButton ${className}`;
+    toggle.tabIndex = 0;
+    toggle.setAttribute('role', 'button');
+    toggle.setAttribute('aria-label', label);
+    toggle.setAttribute('title', title);
+    const run = event => {
+      activate();
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    toggle.addEventListener('click', run);
+    toggle.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') run(event);
+    });
+    toolbarEnd.appendChild(toggle);
+    return toggle;
+  };
+  const shapesToggle = createToggle('orcaToggleShapes', '折叠或展开左侧图形栏',
+    '折叠/展开左侧图形栏 (Ctrl+Shift+K)', () => ui.toggleShapesPanel(!ui.isShapesPanelVisible()));
+  shapesToggle.style.transform = 'scaleX(-1)';
+  const updateShapes = () => {
+    const visible = ui.isShapesPanelVisible();
+    shapesToggle.style.backgroundImage = `url('${visible ? Editor.rightPanelCloseImage : Editor.rightPanelOpenImage}')`;
+    shapesToggle.setAttribute('aria-expanded', String(visible));
+  };
+  let previousPanels = {shapes: true, format: true};
+  const focusToggle = createToggle('orcaToggleFocus', '切换专注模式', '专注模式：折叠/恢复左右侧栏', () => {
+    const focused = !ui.isShapesPanelVisible() && !ui.isFormatPanelVisible();
+    if (focused) {
+      ui.toggleShapesPanel(previousPanels.shapes);
+      ui.toggleFormatPanel(previousPanels.format);
+    } else {
+      previousPanels = {shapes: ui.isShapesPanelVisible(), format: ui.isFormatPanelVisible()};
+      ui.toggleShapesPanel(false);
+      ui.toggleFormatPanel(false);
+    }
+  });
+  const formatToggle = createToggle('orcaToggleFormat', '折叠或展开右侧样式栏',
+    '折叠/展开右侧样式栏 (Ctrl+Shift+P)', () => ui.toggleFormatPanel(!ui.isFormatPanelVisible()));
+  const updatePanels = () => {
+    const formatVisible = ui.isFormatPanelVisible();
+    const focused = !ui.isShapesPanelVisible() && !formatVisible;
+    formatToggle.style.backgroundImage = `url('${formatVisible ? Editor.rightPanelCloseImage : Editor.rightPanelOpenImage}')`;
+    formatToggle.setAttribute('aria-expanded', String(formatVisible));
+    focusToggle.style.backgroundImage = `url('${focused ? Editor.fullscreenExitImage : Editor.fullscreenImage}')`;
+    focusToggle.setAttribute('aria-pressed', String(focused));
+  };
+  ui.addListener('shapesPanelChanged', updateShapes);
+  ui.addListener('shapesPanelChanged', updatePanels);
+  ui.addListener('formatWidthChanged', updatePanels);
+  updateShapes();
+  updatePanels();
+}
+// Orca's isolated plugin session intentionally denies asynchronous clipboard
+// writes. Chromium still exposes navigator.clipboard in the real Electron guest,
+// so capability detection cannot distinguish it from a writable clipboard.
+// Always use the synchronous copy event that Orca permits on a user gesture.
+{
+  const svgText = dataUrl => {
+    const comma = dataUrl.indexOf(',');
+    const payload = dataUrl.substring(comma + 1);
+    if (dataUrl.substring(0, comma).includes(';base64')) {
+      const binary = atob(payload);
+      return new TextDecoder().decode(Uint8Array.from(binary, char => char.charCodeAt(0)));
+    }
+    return decodeURIComponent(payload);
+  };
+  ui.writeImageToClipboard = function(dataUrl, width, height, type, success, error) {
+    const size = width == null || height == null ? '' : ` width="${width}" height="${height}"`;
+    const html = `<img src="${dataUrl}"${size}>`;
+    const onCopy = event => {
+      event.clipboardData.setData('text/html', html);
+      if (type === 'image/svg+xml') event.clipboardData.setData('text/plain', svgText(dataUrl));
+      event.preventDefault();
+    };
+    document.addEventListener('copy', onCopy, {once:true});
+    try {
+      if (!document.execCommand('copy')) throw Error('当前窗口拒绝写入剪贴板');
+      this.editor.setStatus(mxResources.get('copiedToClipboard'));
+      success?.();
+    } catch (cause) {
+      document.removeEventListener('copy', onCopy);
+      error?.(cause);
+    }
+  };
+  ui.copySvg = function(cells, xml, scale) {
+    try {
+      const graph = this.editor.graph;
+      const root = graph.getSvg(null, scale, null, null, null, null, null, null, null, null, null,
+        Editor.isDarkMode() ? 'dark' : 'light', null, cells.length > 0 ? cells : null);
+      if (xml != null) root.setAttribute('content', xml);
+      this.writeImageToClipboard(Editor.createSvgDataUri(mxUtils.getXml(root)),
+        parseInt(root.getAttribute('width')), parseInt(root.getAttribute('height')), 'image/svg+xml', null,
+        mxUtils.bind(this, this.handleError));
+    } catch (error) { this.handleError(error); }
+  };
+  ui.copyImage = function(cells, xml, scale) {
+    try {
+      scale = scale ?? 4;
+      if (!this.spinner.spin(document.body, mxResources.get('exporting'))) return;
+      this.editor.exportToCanvas(mxUtils.bind(this, function(canvas) {
+        try {
+          this.spinner.stop();
+          this.writeImageToClipboard(this.createImageDataUri(canvas, xml, 'png'),
+            canvas.width, canvas.height, 'image/png', null,
+            mxUtils.bind(this, this.handleError));
+        } catch (error) { this.spinner.stop(); this.handleError(error); }
+      }), null, null, null, mxUtils.bind(this, function(error) {
+        this.spinner.stop();
+        this.handleError(error);
+      }), null, null, scale, this.editor.graph.background == null ||
+        this.editor.graph.background == mxConstants.NONE, null, null, null, 10, null, null,
+        Editor.isDarkMode() ? 'dark' : 'light', null, cells.length > 0 ? cells : null);
+    } catch (error) { this.spinner.stop(); this.handleError(error); }
+  };
+  for (const name of ['copyAsImage','copyAsSvg']) ui.actions.get(name)?.setVisible(true);
+}
 ui.hsplitPosition=210;
 ui.formatWidth=240;
 ui.sidebar.showEntries('general;uml;er;bpmn;flowchart;basic;arrows2');

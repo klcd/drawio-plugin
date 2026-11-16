@@ -16,6 +16,9 @@
 - 常用矢量图形库：通用、UML、ER、BPMN、流程图、基础形状和箭头。
 - 多页图表，支持压缩和未压缩的 draw.io XML，保留自定义 mxfile 属性。
 - 撤销与重做、缩放、网格、背景颜色和页面设置。
+- 默认以无界画布打开；仍可通过「查看 → 页面视图」恢复纸张边界，且不会擅自改写文件原有的页面设置。
+- 左右侧栏均可折叠：工具栏按钮可分别收起图形栏和样式栏，左侧分隔线也支持单击折叠；专注模式可一次收起两侧，让图表占据中央画布。
+- 「编辑」菜单可将选区或整张图复制为 4 倍像素 PNG 图像或 SVG。
 - 跟随 Orca 深浅主题；只读文档禁止写回。
 - 约 200 ms 后将变化同步到 Orca 文本缓冲区；文件的脏状态、磁盘保存以及 Ctrl/Cmd+S 由 Orca 管理。保存前等待 `editor.flush`，版本冲突由 Orca 拒绝；失败会显示状态提示，不冒充保存成功。
 - 无效文件显示错误并保留源文，不会用空图覆盖。
@@ -37,12 +40,14 @@ git clone --filter=blob:none --no-checkout https://github.com/jgraph/drawio.git 
 git -C /tmp/orca-drawio-upstream checkout 84487b4891cbc0f32d7e30f34cf878c87cb1f414
 DRAWIO_DIR=/tmp/orca-drawio-upstream node plugins/drawio/build/build.mjs
 ORCA_DIR=/data/LinDoo/orca node plugins/drawio/build/tests/editor.test.mjs
-node /data/LinDoo/orca/config/scripts/validate-plugin-files.mjs plugins/drawio
+ORCA_DIR=/data/LinDoo/orca node plugins/drawio/build/tests/clipboard.test.mjs
+xvfb-run -a /data/LinDoo/orca/node_modules/.bin/electron plugins/drawio/build/tests/clipboard.electron.test.cjs --no-sandbox
+node /data/LinDoo/orca/config/scripts/plugin-authoring/content-validation/validate-plugin-files.mjs plugins/drawio
 ```
 
 构建脚本核对上游固定提交；将编辑器核心、形状、精简 stencil、中文资源、样式、启动代码和文档桥接代码输出为独立文件。隔离帧只通过插件目录内的相对 URL 加载脚本与资源，不使用 Blob 脚本或外部网络。入口 HTML 保持很小；源码在 `build/src/`，请修改源码后重新构建，勿直接修改 `editor/` 产物。
 
-浏览器测试使用 `ORCA_DIR` 中已安装的 Playwright，需要已安装 Chromium（`playwright install chromium`）。测试运行在与 Orca 隔离帧相同的独立 origin 和 CSP 下，覆盖本地多文件加载、干净打开、形状编辑、保存刷新、撤销重做、背景配置、压缩多页、自定义属性、冲突重试、只读、无效 XML 和主题，并断言没有外部网络请求。测试用文档宿主替身模拟 Orca 接口；真实 Orca 中的安装与快捷键还需手动验收。
+浏览器测试使用 `ORCA_DIR` 中已安装的 Playwright，需要已安装 Chromium（`playwright install chromium`）。测试运行在与 Orca 隔离帧相同的独立 origin 和 CSP 下，覆盖本地多文件加载、干净打开、形状编辑、保存刷新、撤销重做、背景配置、压缩多页、自定义属性、冲突重试、只读、无效 XML、主题及隔离 frame 下的图像/SVG 剪贴板兼容路径，并断言没有外部网络请求。测试用文档宿主替身模拟 Orca 接口；真实 Orca 中的安装与快捷键还需手动验收。
 
 ## 发布状态
 

@@ -3,9 +3,9 @@
   "id": "drawio",
   "publisher": "lindoo67",
   "name": "Draw.io",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "execution": "sandboxed-ui",
-  "description": "在 Orca 中离线创建和编辑 draw.io 流程图、架构图及多页图表。",
+  "description": "在 Orca 中完全离线创建和编辑 draw.io 流程图、架构图及多页图表，支持无界画布、可折叠侧栏、常用矢量图形库、撤销重做、自动同步，以及高清 PNG 和 SVG 剪贴板复制。",
   "license": "Apache-2.0",
   "engines": {
     "orca": ">=1.4.248"
