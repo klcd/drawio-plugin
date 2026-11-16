@@ -3,6 +3,7 @@ dist/
 
 # Local dependencies and logs
 node_modules/
+.cache/
 *.log
 
 # OS and editor metadata
