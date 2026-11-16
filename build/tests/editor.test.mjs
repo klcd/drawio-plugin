@@ -2,8 +2,8 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { resolve, extname } from 'node:path'
-const require = createRequire(resolve(process.env.ORCA_DIR || '/data/LinDoo/orca','package.json'))
+import { extname } from 'node:path'
+const require = createRequire(import.meta.url)
 const { chromium } = require('playwright')
 const editorRoot=new URL('../../editor/',import.meta.url)
 const html=readFileSync(new URL('index.html',editorRoot),'utf8')
@@ -30,7 +30,24 @@ try {
   const frame=page.frames()[1]
   await frame.waitForFunction(()=>document.getElementById('message')?.hidden,null,{timeout:30000})
   assert.equal(await frame.evaluate(()=>edits.length),0,'opening must not dirty the document')
+  assert.equal(await frame.evaluate(()=>drawioUi.editor.graph.pageVisible),false,'editor opens with an infinite canvas')
   assert.ok(await frame.locator('.geSidebarContainer').first().evaluate(el=>el.clientWidth)>100,'sidebar visible')
+  assert.equal(await frame.locator('.orcaToggleShapes').count(),1,'left sidebar has a visible toolbar toggle')
+  assert.equal(await frame.locator('.orcaToggleFocus').count(),1,'focus mode has a visible toolbar toggle')
+  assert.equal(await frame.locator('.orcaToggleFormat').count(),1,'right sidebar has a visible toolbar toggle')
+  const diagramWidth=await frame.locator('.geDiagramContainer').evaluate(el=>el.clientWidth)
+  await frame.locator('.orcaToggleShapes').click()
+  await frame.waitForFunction(width=>!drawioUi.isShapesPanelVisible()&&document.querySelector('.geDiagramContainer').clientWidth>width,diagramWidth)
+  await frame.locator('.orcaToggleShapes').click()
+  await frame.waitForFunction(width=>drawioUi.isShapesPanelVisible()&&document.querySelector('.geDiagramContainer').clientWidth<=width,diagramWidth)
+  await frame.locator('.orcaToggleFormat').click()
+  await frame.waitForFunction(width=>!drawioUi.isFormatPanelVisible()&&document.querySelector('.geDiagramContainer').clientWidth>width,diagramWidth)
+  await frame.locator('.orcaToggleFormat').click()
+  await frame.waitForFunction(width=>drawioUi.isFormatPanelVisible()&&document.querySelector('.geDiagramContainer').clientWidth<=width,diagramWidth)
+  await frame.locator('.orcaToggleFocus').click()
+  await frame.waitForFunction(width=>!drawioUi.isShapesPanelVisible()&&!drawioUi.isFormatPanelVisible()&&document.querySelector('.geDiagramContainer').clientWidth>width+300,diagramWidth)
+  await frame.locator('.orcaToggleFocus').click()
+  await frame.waitForFunction(()=>drawioUi.isShapesPanelVisible()&&drawioUi.isFormatPanelVisible())
   assert.ok(await frame.locator('.geSidebar a').count()>10,'shape palette populated')
   assert.ok(await frame.evaluate(()=>Object.keys(drawioUi.sidebar.palettes).filter(name=>name.startsWith('bpmn2')).length)>=5,'visible BPMN palettes registered')
   assert.equal(await frame.evaluate(()=>{
@@ -43,6 +60,7 @@ try {
   await frame.locator('.geSidebar a.geItem').first().click()
   await frame.evaluate(()=>flush())
   assert.equal(await frame.evaluate(()=>drawioUi.editor.graph.getModel().getChildCount(drawioUi.editor.graph.getDefaultParent())),1,'palette click inserts a shape')
+  assert.match(await frame.evaluate(()=>current.content.text),/page="1"/,'infinite view must preserve the file page preference')
   // Background synchronization must not terminate an active label edit.
   assert.equal(await frame.evaluate(async()=>{
     const g=drawioUi.editor.graph;
@@ -111,5 +129,5 @@ try {
   assert.deepEqual(await frame.evaluate(()=>violations),[],'core editor must not violate host CSP')
   assert.deepEqual(errors,[])
   assert.deepEqual(requests,[],'editor must not issue network requests')
-  console.log('PASS: offline CSP, palette/actions, autosync editing, edits/flush, undo/redo, settings, bounded compressed pages, metadata, conflicts/retry, read-only, invalid XML, theme')
+  console.log('PASS: offline CSP, infinite canvas, collapsible panels, palette/actions, autosync editing, edits/flush, undo/redo, settings, bounded compressed pages, metadata, conflicts/retry, read-only, invalid XML, theme')
 } finally {await browser.close()}
