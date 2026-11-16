@@ -10,10 +10,17 @@ const html=readFileSync(new URL('index.html',editorRoot),'utf8')
 const template=readFileSync(new URL('../../templates/empty.drawio',import.meta.url),'utf8')
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']})
 try {
-  const cases=[['en-US','File'],['en','File'],['de-DE','Datei'],['fr-FR','Fichier'],['es-ES','Archivo'],['ja-JP','ファイル'],['pt-BR','Arquivo'],['pt-PT','Ficheiro'],['zh-CN','文件'],['zh-TW','檔案'],['zh-Hant-HK','檔案'],['sv-SE','File'],['ar-EG','File']]
+  const cases=[
+    ['en-US','en','File'],['en','en','File'],['de-DE','de','Datei'],['es-ES','es','Archivo'],
+    ['fr-FR','fr','Fichier'],['it-IT','it','File'],['ja-JP','ja','ファイル'],['ko-KR','ko','파일'],
+    ['nl-NL','nl','Bestand'],['pl-PL','pl','Plik'],['pt-BR','pt-br','Arquivo'],
+    ['pt-Latn-BR','pt-br','Arquivo'],['pt-PT','pt','Ficheiro'],['ru-RU','ru','Файл'],
+    ['tr-TR','tr','Dosya'],['zh-CN','zh','文件'],['zh-TW','zh-tw','檔案'],
+    ['zh-Hant-HK','zh-tw','檔案'],['sv-SE','en','File'],['ar-EG','en','File']
+  ]
   const labels={}
   // sv and ar have no bundle here, so they must fall back to English rather than fail.
-  for (const [locale,expected] of cases) {
+  for (const [locale,expectedLanguage,expectedLabel] of cases) {
     const page=await browser.newPage({viewport:{width:1440,height:1000},locale})
     const errors=[]
     page.on('pageerror', e=>errors.push(e.message))
@@ -33,10 +40,13 @@ try {
     await page.waitForSelector('iframe')
     const frame=page.frames()[1]
     await frame.waitForFunction(()=>document.getElementById('message')?.hidden,null,{timeout:30000})
-    const [file,lang]=await frame.evaluate(()=>[mxResources.get('file'),mxLanguage])
+    const [file,lang,violations]=await frame.evaluate(()=>[mxResources.get('file'),mxLanguage,window.violations])
     labels[locale]=file
-    if (expected) assert.equal(file,expected,`${locale} menu label (language ${lang})`)
+    assert.equal(lang,expectedLanguage,`${locale} selected language`)
+    assert.equal(file,expectedLabel,`${locale} menu label (language ${lang})`)
     assert.deepEqual(errors,[],`${locale} page errors`)
+    assert.deepEqual(requests,[],`${locale} external requests`)
+    assert.deepEqual(violations,[],`${locale} CSP violations`)
     await page.close()
   }
   console.log('PASS: UI language follows the browser locale',JSON.stringify(labels))

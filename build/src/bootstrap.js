@@ -9,7 +9,9 @@ const pickLanguage = () => {
     const [primary, ...rest] = String(tag).toLowerCase().split('-');
     if (primary === 'en') return 'en';
     if (primary === 'zh') return rest.some(part => ['tw','hk','mo','hant'].includes(part)) ? 'zh-tw' : 'zh';
-    if (primary === 'pt' && rest[0] === 'br') return 'pt-br';
+    if (primary === 'pt') {
+      try { if (new Intl.Locale(tag).region === 'BR') return 'pt-br'; } catch {}
+    }
     if (bundledLanguages.includes(primary)) return primary;
   }
   return 'en';
