@@ -3,9 +3,9 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { resolve, extname } from 'node:path'
+import { extname } from 'node:path'
 
-const require=createRequire(resolve(process.env.ORCA_DIR || '/data/LinDoo/orca','package.json'))
+const require=createRequire(import.meta.url)
 const {chromium}=require('playwright')
 const editorRoot=new URL('../../editor/',import.meta.url)
 const html=readFileSync(new URL('index.html',editorRoot),'utf8')

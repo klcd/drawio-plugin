@@ -36,18 +36,22 @@
 构建需要 Node.js 22+。编辑器运行在 Orca 桌面版的隔离 Chromium frame 中；构建完全使用 Node 内置模块，产物位于 `editor/`，安装后无需 npm 或联网。
 
 ```sh
+npm ci
+npx playwright install chromium
 git clone --filter=blob:none --no-checkout https://github.com/jgraph/drawio.git /tmp/orca-drawio-upstream
 git -C /tmp/orca-drawio-upstream checkout 84487b4891cbc0f32d7e30f34cf878c87cb1f414
-DRAWIO_DIR=/tmp/orca-drawio-upstream node plugins/drawio/build/build.mjs
-ORCA_DIR=/data/LinDoo/orca node plugins/drawio/build/tests/editor.test.mjs
-ORCA_DIR=/data/LinDoo/orca node plugins/drawio/build/tests/clipboard.test.mjs
-xvfb-run -a /data/LinDoo/orca/node_modules/.bin/electron plugins/drawio/build/tests/clipboard.electron.test.cjs --no-sandbox
-node /data/LinDoo/orca/config/scripts/plugin-authoring/content-validation/validate-plugin-files.mjs plugins/drawio
+DRAWIO_DIR=/tmp/orca-drawio-upstream npm run build
+npm run check
+npm run test:browser
+xvfb-run -a npm run test:electron
+node /data/LinDoo/orca/config/scripts/plugin-authoring/content-validation/validate-plugin-files.mjs .
 ```
 
 构建脚本核对上游固定提交；将编辑器核心、形状、精简 stencil、中文资源、样式、启动代码和文档桥接代码输出为独立文件。隔离帧只通过插件目录内的相对 URL 加载脚本与资源，不使用 Blob 脚本或外部网络。入口 HTML 保持很小；源码在 `build/src/`，请修改源码后重新构建，勿直接修改 `editor/` 产物。
 
-浏览器测试使用 `ORCA_DIR` 中已安装的 Playwright，需要已安装 Chromium（`playwright install chromium`）。测试运行在与 Orca 隔离帧相同的独立 origin 和 CSP 下，覆盖本地多文件加载、干净打开、形状编辑、保存刷新、撤销重做、背景配置、压缩多页、自定义属性、冲突重试、只读、无效 XML、主题及隔离 frame 下的图像/SVG 剪贴板兼容路径，并断言没有外部网络请求。测试用文档宿主替身模拟 Orca 接口；真实 Orca 中的安装与快捷键还需手动验收。
+浏览器测试使用本仓库锁定版本的 Playwright，需要已安装 Chromium（`playwright install chromium`）。测试运行在与 Orca 隔离帧相同的独立 origin 和 CSP 下，覆盖本地多文件加载、干净打开、形状编辑、保存刷新、撤销重做、背景配置、压缩多页、自定义属性、冲突重试、只读、无效 XML、主题及隔离 frame 下的图像/SVG 剪贴板兼容路径，并断言没有外部网络请求。测试用文档宿主替身模拟 Orca 接口；真实 Orca 中的安装与快捷键还需手动验收。
+
+GitHub Actions 会在发往 `main` 的 pull request 更新时，以及提交进入 `main` 后运行同一套校验。CI 还会从固定的 draw.io 上游提交重新构建编辑器，并确认 `editor/` 和第三方声明与仓库中的产物完全一致。
 
 ## 发布状态
 

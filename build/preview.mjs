@@ -2,7 +2,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { resolve, extname } from 'node:path'
-const require=createRequire(resolve(process.env.ORCA_DIR || '/data/LinDoo/orca','package.json'))
+const require=createRequire(import.meta.url)
 const {chromium}=require('playwright')
 const root=resolve(import.meta.dirname,'..')
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']})
